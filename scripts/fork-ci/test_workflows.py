@@ -79,10 +79,15 @@ def ci_problems(ci):
     else:
         if contract.get("name") != "Fork configuration contracts" or contract["runs-on"] != "ubuntu-24.04":
             problems.append("configuration check identity or isolation changed")
+        if any(key in contract for key in ["if", "needs", "continue-on-error"]):
+            problems.append("required configuration job must not be skipped or ignored")
+        if any("if" in step or "continue-on-error" in step for step in contract["steps"]):
+            problems.append("required configuration steps must not be skipped or ignored")
         commands = [s["run"] for s in contract["steps"] if "run" in s]
         if commands != [
             "python -m pip install --only-binary=:all: --require-hashes -r scripts/fork-ci/requirements.txt",
             "python -m unittest discover -s scripts/fork-ci -p 'test_*.py' -v",
+            "python -m unittest discover -s scripts/bench-apps -p 'test_*.py' -v",
         ]:
             problems.append("configuration job executes outside its bounded admission scope")
     if "secrets." in json.dumps(ci):
@@ -123,6 +128,9 @@ class ForkWorkflowContracts(unittest.TestCase):
             lambda x: x["permissions"].update({"id-token": "write"}),
             lambda x: x["on"].update({"pull_request_target": {}}),
             lambda x: x["jobs"]["lint"]["steps"].append({"run": "npm publish"}),
+            lambda x: x["jobs"]["workflow-contracts"]["steps"].pop(),
+            lambda x: x["jobs"]["workflow-contracts"].update({"if": "false"}),
+            lambda x: x["jobs"]["workflow-contracts"]["steps"][-1].update({"continue-on-error": "true"}),
         ]
         # Mutation tests only qualify the oracle after the real workflow has passed it.
         self.assertEqual(ci_problems(ci), [])

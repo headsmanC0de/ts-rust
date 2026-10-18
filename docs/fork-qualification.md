@@ -14,6 +14,26 @@ CI retains all inherited fmt/codegen/clippy, release workspace tests, Go baselin
 
 A separately built release binary must later pass the bounded good/bad-TypeScript, declaration/emit and LSP/API canaries at exact source identity. No such result is claimed by this change. Hosted runner labels are configured; successful provider execution is separate evidence.
 
+## Benchmark report admission
+
+The required configuration job also runs the benchmark tooling suites under
+scripts/bench-apps. These are CLI fixture tests, not compiler conformance runs.
+The workflow contract rejects removal, conditional skipping or ignored failure
+of that invocation.
+
+Before summary.py prints a table, the selected normal and fast Rust outputs must
+match the selected oracle, including complete diagnostic records and process
+exits. Limited-run timings retain their own evidence identity. Timed iteration
+exits must match their selected preflight, and every derived value must be finite
+and positive. Missing evidence or a later failed case withholds the whole report.
+Other compiler columns show timings without claiming diagnostic equivalence.
+Effect mode compares Effect records and exact exits; plain TypeScript comparison
+belongs to the separate noeffect pair.
+
+A withheld fast table does not establish a compiler defect: --fast can
+intentionally change diagnostics. Raw experimental results remain available.
+This admission does not change consumer compilers or qualify a fork binary.
+
 ## Configuration tests
 
 Run in an isolated Python3.12 environment installed from scripts/fork-ci/requirements.txt:
