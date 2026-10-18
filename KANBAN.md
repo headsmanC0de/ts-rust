@@ -6,7 +6,7 @@ Source implemented, locally verified, CI verified and merged are distinct states
 | Task | State | Acceptance / evidence |
 | --- | --- | --- |
 | Complete diagnostic/process admission and selected timing stream binding | Local verified; published in stacked draft PR #6 | 49 benchmark CLI regressions pass |
-| Scoped rules, lint/format and shared required-job interface | Local verified; provider rerun pending | 65 fork/workflow/security/hook tests plus lint/format pass |
+| Scoped rules, lint/format and shared required-job interface | Local verified; provider rerun pending | Discovered fork/workflow/security/hook suites plus lint/format pass; exact counts belong to run receipts |
 | Preserve identity and foreign Git hooks | Local verified | 7 real temporary-Git installer tests pass |
 | Exact-head read-only premerge detector | Local verified; live fail closed | 17 fixture tests; stacked base rejected; approved single-owner policy evaluated |
 | Restore hosted emit-pool prerequisite | Implemented; native rerun pending | Explicit fixture1 retained; missing-setting mutation rejected; four-platform tests must pass |

@@ -38,7 +38,7 @@ independent provider readback. Keep each layer honest about its scope.
 
 ## Verified state
 
-The shared quality runner passed 65 workflow/security/hook tests and 49 benchmark
+The shared quality runner passed 62 workflow/security/hook tests and 49 benchmark
 CLI tests, plus Ruff lint and formatting, on Linux on 2026-10-18. The live detector
 rejects the current stacked PR base rather than treating it as protected main.
 A separate read-only main-protection receipt shows zero approvals and no last-push
