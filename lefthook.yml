@@ -1,0 +1,12 @@
+assert_lefthook_installed: true
+
+pre-commit:
+  commands:
+    fork-quality:
+      run: >-
+        if [ "$(uname -s)" = Darwin ]; then
+          echo "Project checks belong on the admitted VM; commit there." >&2;
+          exit 1;
+        fi;
+        "${FORK_QUALITY_PYTHON:-python3}" scripts/fork-ci/quality.py
+      fail_text: "Fork lint, formatting or contract checks failed; use the declared managed Python environment."

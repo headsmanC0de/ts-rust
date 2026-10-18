@@ -1,3 +1,5 @@
+For searches/static checks read [search-rules.md](search-rules.md); for failures read [TESTS.md](TESTS.md) and [GUARDS.md](GUARDS.md); for trust/artifacts read [SECURITY.md](SECURITY.md) and [CYBERSECURITY.md](CYBERSECURITY.md); interface ownership is in [DESIGN.md](DESIGN.md).
+
 For Moonrock fork execution read [the fork adapter](docs/fork-qualification.md) first; historical upstream authorizations/hosts are not current credentials/permission.
 
 # Typechecker work rules

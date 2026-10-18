@@ -18,9 +18,9 @@ A separately built release binary must later pass the bounded good/bad-TypeScrip
 
 Run in an isolated Python3.12 environment installed from scripts/fork-ci/requirements.txt:
 
-    PYTHONDONTWRITEBYTECODE=1 <isolated-env>/bin/python -m unittest discover -s scripts/fork-ci -p 'test_*.py' -v
+    PYTHONDONTWRITEBYTECODE=1 <isolated-env>/bin/python scripts/fork-ci/quality.py
 
-The GitHub configuration job uses Python3.12 and an isolated, exact, hash-locked binary PyYAML dependency. It uses PyYAML BaseLoader to preserve GitHub's `on` key, not a custom YAML parser. The CI step-object digests were recorded independently from source780dc512 before edits; only the action revision is normalized, preserving action identity, conditions, permissions, arguments and environment; the digests prevent bypassing inherited checks while adapting runners. Intentional upstream command changes require review against the new source before updating this evidence.
+The GitHub configuration job uses Python3.12 and isolated, exact, hash-locked binary dependencies declared in scripts/fork-ci/requirements.txt. It uses PyYAML BaseLoader to preserve GitHub's `on` key, not a custom YAML parser. The CI step-object digests were recorded independently from source780dc512 before edits; only the action revision and the reviewed native fixture wrapper step are normalized, preserving action identity, conditions, permissions, arguments and environment; the digests prevent bypassing inherited checks while adapting runners. Intentional upstream command changes require review against the new source before updating this evidence.
 
 RED records the inherited inaccessible runners, mutable CI action references, missing owning push inputs and missing repository/publishing guards. Negative mutations verify rejection of self-hosted runners, removed platform coverage, skipped inherited jobs, mutable actions, OIDC escalation, privileged events, publishing commands and fork-retargeted guards. No test executes a deployment or publishing action.
 
@@ -36,3 +36,7 @@ The ordinary CI workflow owns its immutable action pins; scripts/fork-ci/require
 - https://pypi.org/pypi/PyYAML/6.0.3/json — CPython3.12 manylinux x86_64 wheel; PyYAML6.0.3 is the observed stable release.
 
 These pins apply to ordinary CI; retained, fork-excluded upstream service workflows still contain upstream action tags. Initial RED used the VM's existing PyYAML6.0.1; GREEN qualification uses only the isolated, hash-locked dependency. No system Python packages are changed.
+
+## Local enforcement
+
+The same quality entrypoint owns lint, formatting, exact installed dependency checks and contract discovery. Prepare its isolated environment from requirements before installing the repository-local Lefthook pre-commit hook; set FORK_QUALITY_PYTHON to that environment's Python. The hook never installs dependencies. A missing or mismatched tool fails closed. Mac project runtime checks are rejected by the hook. See [GUARDS.md](../GUARDS.md) for configured versus verified enforcement and [TESTS.md](../TESTS.md) for runtime qualification limits.
