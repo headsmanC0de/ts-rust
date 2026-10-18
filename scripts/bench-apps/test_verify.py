@@ -1,4 +1,5 @@
 """Behavioral CLI tests for benchmark differential admission."""
+
 import subprocess
 import sys
 import tempfile
@@ -26,14 +27,15 @@ class VerifyTests(unittest.TestCase):
             (self.results / f"{stem}.{tool}.stdout").write_text(output)
             (self.results / f"{stem}.{tool}.stderr").write_text("")
         (self.results / f"{stem}.errors").write_text(
-            "".join(f"{tool} rc={code} errors=0\n"
-                    for tool, code in zip(TOOLS, codes))
+            "".join(f"{tool} rc={code} errors=0\n" for tool, code in zip(TOOLS, codes))
         )
 
     def run_case(self, stem=CASE):
         return subprocess.run(
             [sys.executable, str(VERIFIER), str(self.work), "--case", stem],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
 
     def assert_rejected(self, result):
@@ -123,8 +125,10 @@ class VerifyTests(unittest.TestCase):
 
     def test_rejects_changed_nested_message_after_blank_line(self):
         self.write_case(
-            (ERROR + "  First cause\n\n    Expected A\n",
-             ERROR + "  First cause\n\n    Expected B\n"),
+            (
+                ERROR + "  First cause\n\n    Expected A\n",
+                ERROR + "  First cause\n\n    Expected B\n",
+            ),
             (1, 1),
         )
         self.assert_rejected(self.run_case())
@@ -135,18 +139,24 @@ class VerifyTests(unittest.TestCase):
         self.assertEqual(self.run_case().returncode, 0)
 
     def test_rejects_unknown_output_even_with_diagnostics(self):
-        self.write_case((ERROR + "compiler aborted\n", ERROR + "compiler aborted\n"), (2, 2))
+        self.write_case(
+            (ERROR + "compiler aborted\n", ERROR + "compiler aborted\n"), (2, 2)
+        )
         self.assert_rejected(self.run_case())
 
     def test_rejects_panic_even_with_equal_diagnostics_and_normal_numeric_exit(self):
         self.write_case((ERROR, ERROR), (2, 2))
         for tool in TOOLS:
-            (self.results / f"{CASE}.{tool}.stderr").write_text("panic: compiler failed\n")
+            (self.results / f"{CASE}.{tool}.stderr").write_text(
+                "panic: compiler failed\n"
+            )
         self.assert_rejected(self.run_case())
 
     def test_rejects_unported_even_with_equal_diagnostics(self):
         self.write_case((ERROR, ERROR), (2, 2))
-        (self.results / f"{CASE}.tsc-rs.stderr").write_text("unported checker operation\n")
+        (self.results / f"{CASE}.tsc-rs.stderr").write_text(
+            "unported checker operation\n"
+        )
         self.assert_rejected(self.run_case())
 
     def test_rejects_unrecognized_nonempty_output(self):

@@ -1,4 +1,5 @@
 """CLI oracles for effective benchmark provenance and all-or-nothing output."""
+
 import json
 import subprocess
 import sys
@@ -15,7 +16,13 @@ FAST = "tsc-rs-fast"
 ORACLE = "tsc7"
 ERROR = "src/app.ts(2,3): error TS2322: Type mismatch.\n"
 EFFECT = "src/app.ts(4,3): warning TS377001: Effect warning.\n"
-T3_PROJECTS = ("apps-server", "apps-web", "apps-mobile", "packages-client-runtime", "packages-shared")
+T3_PROJECTS = (
+    "apps-server",
+    "apps-web",
+    "apps-mobile",
+    "packages-client-runtime",
+    "packages-shared",
+)
 
 
 class SummaryTests(unittest.TestCase):
@@ -40,7 +47,9 @@ class SummaryTests(unittest.TestCase):
     def run_summary(self):
         return subprocess.run(
             [sys.executable, str(SUMMARY), str(self.work)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
 
     def withheld(self, result):
@@ -95,7 +104,9 @@ class SummaryTests(unittest.TestCase):
         for project in T3_PROJECTS:
             stem = f"t3-{project}-effect"
             self.artifact(stem, output=EFFECT, code=2)
-        self.artifact(f"t3-{T3_PROJECTS[0]}-effect.{FAST}", (FAST,), output=EFFECT, code=1)
+        self.artifact(
+            f"t3-{T3_PROJECTS[0]}-effect.{FAST}", (FAST,), output=EFFECT, code=1
+        )
         self.withheld(self.run_summary())
 
     def test_no_results_cannot_be_a_successful_report(self):
@@ -206,7 +217,7 @@ class SummaryTests(unittest.TestCase):
         self.withheld(self.run_summary())
 
     def test_huge_integer_median_fails_without_traceback(self):
-        self.artifact(CASE, median=10 ** 1000)
+        self.artifact(CASE, median=10**1000)
         self.withheld(self.run_summary())
 
     def test_nonfinite_median_fails_without_traceback(self):

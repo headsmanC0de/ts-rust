@@ -1,0 +1,4 @@
+pre-commit:
+  jobs:
+    - name: tooling-quality
+      run: FORK_PYTHON=.venv/bin/python bash scripts/fork-ci/quality.sh

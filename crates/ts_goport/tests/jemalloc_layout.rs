@@ -105,6 +105,21 @@ fn layout_from_inside() {
                 .is_some_and(|last| last.as_ptr().wrapping_add(BLOCK) == block.as_ptr());
             if n > 0 && !follows {
                 grows += 1;
+                if !on_2mib(block.as_ptr()) {
+                    // Diagnose a failed invariant without perturbing successful allocations.
+                    // Residues/distances expose geometry without publishing address-space pointers.
+                    let page = Access::<usize>::read(b"arenas.page\0".name()).ok();
+                    let previous = blocks.last().map(|last| last.as_ptr() as usize);
+                    let address = block.as_ptr() as usize;
+                    let boundary = 2 * MIB;
+                    eprintln!(
+                        "layout_geometry arena={arena} block={n} allocator_page={page:?} requested={BLOCK} capacity={} residue={} previous_residue={:?} distance={:?}",
+                        block.capacity(),
+                        address % boundary,
+                        previous.map(|value| value % boundary),
+                        previous.map(|value| address.abs_diff(value)),
+                    );
+                }
                 assert!(on_2mib(block.as_ptr()), "arena {arena}, block {n}");
             }
             blocks.push(block);

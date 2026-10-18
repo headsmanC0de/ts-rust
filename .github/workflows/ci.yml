@@ -56,10 +56,10 @@ jobs:
       - name: Install isolated workflow test dependency
         run: >-
           python -m pip install --only-binary=:all: --require-hashes -r scripts/fork-ci/requirements.txt
-      - name: Check workflow trust and coverage contracts
-        run: python -m unittest discover -s scripts/fork-ci -p 'test_*.py' -v
-      - name: Check selected benchmark evidence and publication
-        run: python -m unittest discover -s scripts/bench-apps -p 'test_*.py' -v
+      - name: Run tooling quality contract
+        env:
+          FORK_PYTHON: python
+        run: bash scripts/fork-ci/quality.sh
 
   lint:
     name: fmt, codegen, clippy
@@ -102,6 +102,8 @@ jobs:
     env:
       # One test thread, as goport-tests.sh runs them.
       RUST_TEST_THREADS: 1
+      # Hosted runners can have fewer cores than checker threads; still exercise the pool.
+      GOPORT_EMIT_THREADS: 2
     steps:
       # LF in the working tree, as on the other hosts: Git for Windows sets core.autocrlf=true, which
       # gives the test fixtures and the scripts CRLF (README.md, "Develop on Windows").
@@ -150,7 +152,11 @@ jobs:
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          prefix-key: "v1-fork-workspace"
+          cache-workspace-crates: "true"
+          cache-bin: "false"
+          save-if: "${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}"
+          cache-on-failure: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}"
       - name: Build
         run: |
           cargo test --release --locked --workspace --no-run
