@@ -1,3 +1,5 @@
+For Moonrock fork execution read [the fork adapter](docs/fork-qualification.md) first; historical upstream authorizations/hosts are not current credentials/permission.
+
 # Typechecker work rules
 
 ## Read before work
