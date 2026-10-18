@@ -9,6 +9,7 @@ bench_tools() {
     Darwin/arm64) platform=darwin-arm64; bun_platform=darwin-aarch64 ;;
     *) echo "unsupported benchmark platform" >&2; exit 1 ;;
   esac
+  BENCH_LINEAGE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/lineage.py
   RS_PKG=$work/node_modules/@tsc-rs/$platform/lib/tsc
   RS=${RS_BIN:-$RS_PKG}
   GO=$work/node_modules/@typescript/typescript-$platform/lib/tsc
@@ -19,7 +20,11 @@ bench_tools() {
 # run to have the same exit code as its preflight; diagnostic exits are valid.
 bench_measure() {
   local out=$1; shift
-  local cmds=("$@") args=() i rc
+  local cmds=("$@") args=() descriptors=() i rc
+  for i in "${sel[@]}"; do
+    descriptors+=("${names[$i]}" "${cmds[$i]}" "${tool_artifacts[$i]}")
+  done
+  python3 "$BENCH_LINEAGE" reserve "$out" "$BENCH_PROJECT_ROOT" "$BENCH_CONFIG" "${descriptors[@]}"
   [[ ! -e $out.json ]] || { echo "result already exists: $out.json" >&2; exit 1; }
   : >"$out.errors"
   for i in "${sel[@]}"; do
@@ -44,4 +49,5 @@ for run in json.loads(Path(str(out) + '.json').read_text())['results']:
     if not all(code == codes[run['command']] for code in run['exit_codes']):
         raise SystemExit(f"inconsistent exits: {run['command']}: {run['exit_codes']}")
 PY
+  python3 "$BENCH_LINEAGE" finalize "$out"
 }

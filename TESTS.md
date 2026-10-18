@@ -50,3 +50,13 @@ reset counters after compaction, agent replacement, branch or batch rename.
 Current findings have distinct scopes: [native/CI incidents](docs/recurring-problems-2026-10-18.md)
 and [benchmark/evidence history](docs/audits/2026-10-18-recurring-problems.md).
 Statuses live in source-bound receipts and the canonical task graph, not a manually green checklist.
+
+Benchmark receipt regressions exercise actual CLI/shell boundaries: per-stem normal/FAST
+identity, partial/no-clobber reservation, changed binary/config, tampered artifacts,
+atomic replacement between reads and ambient fast-mode overrides. Consumers parse
+verified byte snapshots. Application node_modules and undeclared dependencies are
+outside the recorded input closure; a receipt does not prove they stayed immutable.
+
+Allocator observation helpers must compile with the owning unsafe-code prohibition.
+Parser tests prove bounded numeric/closed-policy output, unknown handling and malformed
+range safety; native ARM geometry and protected compiler acceptance remain separate.

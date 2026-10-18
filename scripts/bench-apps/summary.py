@@ -11,6 +11,7 @@ import math
 import sys
 from pathlib import Path
 
+from lineage import capture
 from verify import (
     ORACLE_TOOL,
     RUST_TOOLS,
@@ -39,9 +40,10 @@ def medians(stem: str) -> dict[str, float] | None:
     """Median time per tool for one result stem: the full run, then each limited run over it."""
     if not (R / f"{stem}.json").exists():
         return None
-    med, sources, selected = {}, {}, {}
+    med, sources, selected, measurements = {}, {}, {}, {}
     for f in [R / f"{stem}.json", *sorted(R.glob(f"{stem}.*.json"))]:
-        data = json.loads(f.read_text())
+        measurement = capture(R, f.stem, stem)
+        data = json.loads(measurement.timing)
         seen = set()
         for result in data["results"]:
             tool, median = result["command"], result["median"]
@@ -50,10 +52,17 @@ def medians(stem: str) -> dict[str, float] | None:
             positive_finite(median)
             seen.add(tool)
             med[tool], sources[tool], selected[tool] = median, f.stem, result
+            measurements[tool] = measurement
     if set(med) != set(TOOLS):
         raise ValueError("missing published tool")
+    evidence = {tool: measurements[tool].evidence(tool) for tool in TOOLS}
+    identities = {item.input_identity for item in evidence.values()}
+    if len(identities) != 1:
+        raise ValueError("selected input identities differ")
     for tool in TOOLS:
-        code = exit_codes(R, sources[tool], required_tools=(tool,))[tool]
+        code = exit_codes(
+            R, sources[tool], required_tools=(tool,), payload=evidence[tool].errors
+        )[tool]
         observed = selected[tool].get("exit_codes")
         if (
             not isinstance(observed, list)
@@ -70,6 +79,8 @@ def medians(stem: str) -> dict[str, float] | None:
             rust_stem=sources[tool],
             oracle_stem=sources[ORACLE_TOOL],
             emit=False,
+            rust_evidence=evidence[tool],
+            oracle_evidence=evidence[ORACLE_TOOL],
         )
     return med
 
@@ -143,7 +154,15 @@ try:
         if count not in [0, len(T3)]:
             raise ValueError("incomplete T3 group")
     rendered = report(admitted)
-except (OSError, ValueError, KeyError, TypeError, UnicodeError, OverflowError):
+except (
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
+    UnicodeError,
+    OverflowError,
+    AttributeError,
+):
     raise SystemExit("benchmark evidence invalid; parity table withheld") from None
 
 print(rendered)

@@ -10,10 +10,10 @@ Source implemented, locally verified, CI verified and merged are distinct states
 | Preserve identity and foreign Git hooks | Local verified | 7 real temporary-Git installer tests pass |
 | Exact-head read-only premerge detector | Local verified; live fail closed | 17 fixture tests; stacked base rejected; approved single-owner policy evaluated |
 | Restore hosted emit-pool prerequisite | Implemented; native rerun pending | Explicit fixture1 retained; missing-setting mutation rejected; four-platform tests must pass |
-| ARM allocator geometry investigation | In progress | Original assertion retained; obtain new failure geometry before changing allocator logic |
-| PR workspace cache policy | Implemented; performance proof pending | Mutations rejected; measure actual cold/warm provider timings |
+| ARM allocator geometry investigation | In progress | Original assertion retained; ARM allocator64KiB/OS4KiB observed; x64 page-size counterfactual does not reproduce; collect safe mapping/THP facts |
+| PR workspace cache policy | Implemented; performance proof pending | Mutations rejected; 269460705-byte PR6 cache saved after ARM failure; warm timing proof pending |
 | Trusted external premerge enforcement | Open | Owner-approved provider policy, independent technical verdict, all exact-head jobs and executed quality step |
-| Immutable benchmark variant metadata lineage | Open | Bind source/config/binary hashes to selected stream; reject stale or overwritten identity |
+| Immutable benchmark variant metadata lineage | Local verified; provider rerun pending | Atomic per-stem receipts, actual tool/config/artifact hashes and consumed byte snapshots; application dependencies outside declared closure |
 | Merge/release qualification | Blocked by native CI and review | Admit parent PR #5, retarget #6 safely, independent review; no release/global adoption before acceptance |
 
 DoR: reproduce, identify producer/consumer and current source, choose a bounded owner.

@@ -5,8 +5,10 @@ import hashlib
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,8 +19,10 @@ results.mkdir(parents=True, exist_ok=True)
 
 def command(*args: str, cwd: Path | None = None) -> str:
     try:
-        run = subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=False)
-    except OSError:
+        run = subprocess.run(
+            args, cwd=cwd, capture_output=True, text=True, check=False, timeout=5
+        )
+    except (OSError, subprocess.TimeoutExpired):
         return "unavailable (failed to launch)"
     return (
         run.stdout.strip()
@@ -124,8 +128,16 @@ for name in [
 build = Path(os.environ.get("RS_BIN", "/nonexistent")).parent / "build.json"
 if build.exists():
     metadata["compilerBuild"] = json.loads(build.read_text())
-case = os.environ.get("BENCH_CASE")
-(results / (f"metadata-{case}.json" if case else "metadata.json")).write_text(
-    json.dumps(metadata, indent=2) + "\n"
-)
-print(json.dumps(metadata, indent=2))
+# Environment diagnostics are not measurement admission identity. Keep each capture;
+# lineage.py owns immutable physical receipts and never trusts this descriptive data.
+case = os.environ.get("BENCH_CASE", "run")
+if not re.fullmatch(r"[A-Za-z0-9_-]+", case):
+    raise SystemExit("invalid environment capture case")
+folder = results / "environment"
+folder.mkdir(mode=0o700, exist_ok=True)
+file = folder / f"{case}-{uuid.uuid4().hex}.json"
+with os.fdopen(
+    os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w"
+) as output:
+    json.dump(metadata, output, indent=2)
+print('{"event":"benchmark.environment","status":"saved"}')

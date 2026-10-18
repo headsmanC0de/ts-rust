@@ -258,6 +258,8 @@ class QualityTests(unittest.TestCase):
         files = [
             *ROOT.glob("scripts/bench-apps/*.py"),
             *ROOT.glob("scripts/fork-ci/*.py"),
+            ROOT / "crates/ts_goport/tests/jemalloc_layout.rs",
+            ROOT / "crates/ts_goport/tests/common/allocator_geometry.rs",
         ]
         for path in files:
             self.assertLessEqual(

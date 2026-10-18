@@ -9,6 +9,7 @@ retain an actual invocation receipt. The shared interface is `scripts/fork-ci/qu
 | Workflow trust and coverage | test_workflows.py; removed/skipped/ignored invocation, wrong runner/token | configuration tests, exact provider execution separate |
 | Rules/hook reachability | test_rules_contract.py and owning quality tests; missing rule/wiring/size | references/configuration, not agent reasoning |
 | Completion | verify.py; crash, missing receipt, unknown output, mismatched exits | CLI regression; not full compiler conformance |
+| Physical measurement integrity | lineage.py + actual CLI/shell regressions; overwrite, missing/stale/tampered bytes, timing/diagnostic replacement race, ambient fast mode | declared closure only; unsigned receipt, dependency freeze/build attestation separate |
 | Selected/atomic report | summary.py; stale oracle, failed overlay, invalid math, late failure | CLI fixture admission; selected binary provenance separate |
 | Local dispatch | quality.sh and dispatch tests; failed/timeout/unsupported host | native negative oracles; no automatic install/fallback |
 | Early native failure context | native_correctness.py + tests; hostile text/nonzero/signal | actual native failure event and retained exit required |

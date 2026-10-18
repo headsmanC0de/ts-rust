@@ -83,8 +83,13 @@ for p in $PROJECTS; do
             "$RS -p $c $F --fast --pretty false"
             "sh -c '$BUN check -p $c $F --no-pretty --all; rc=\$?; [ \"\$rc\" -le 2 ] || exit \"\$rc\"; $ETSGO diagnostics --project $PWD/$c --format text'")
     fi
+    if [[ $mode == noeffect ]]; then
+      tool_artifacts=("$(command -v node)"$'\n'"$work/node_modules/ts6/lib/tsc.js" "$GO" "$RS" "$RS" "$BUN")
+    else
+      tool_artifacts=("$(command -v node)"$'\n'"$work/ts6effect/node_modules/typescript/lib/tsc.js" "$GOE" "$RS" "$RS" "$BUN"$'\n'"$ETSGO"$'\n'"$GOE"$'\n'"$(command -v node)")
+    fi
     out=$work/results/t3-$slug-$mode$tag
-    bench_measure "$out" "${cmds[@]}"
+    BENCH_PROJECT_ROOT="$t3" BENCH_CONFIG="$PWD/$c" bench_measure "$out" "${cmds[@]}"
   done
 done
 echo DONE

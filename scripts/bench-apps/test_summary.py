@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from lineage_fixtures import bind_fixtures
+
 SUMMARY = Path(__file__).with_name("summary.py")
 CASE = "vscode"
 LATER_CASE = "sentry"
@@ -45,6 +47,7 @@ class SummaryTests(unittest.TestCase):
         (self.results / f"{stem}.json").write_text(json.dumps({"results": timings}))
 
     def run_summary(self):
+        bind_fixtures(self.results)
         return subprocess.run(
             [sys.executable, str(SUMMARY), str(self.work)],
             capture_output=True,

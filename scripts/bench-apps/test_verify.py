@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from lineage_fixtures import bind_fixtures
+
 VERIFIER = Path(__file__).with_name("verify.py")
 CASE = "vscode"
 TOOLS = ("tsc-rs", "tsc7")
@@ -31,6 +33,7 @@ class VerifyTests(unittest.TestCase):
         )
 
     def run_case(self, stem=CASE):
+        bind_fixtures(self.results)
         return subprocess.run(
             [sys.executable, str(VERIFIER), str(self.work), "--case", stem],
             capture_output=True,

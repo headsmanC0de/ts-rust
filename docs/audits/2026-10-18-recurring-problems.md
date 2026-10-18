@@ -81,3 +81,28 @@ runner's lint/format/workflow/benchmark stages. Uppercase topic documents are th
 owners; lowercase duplicates are removed. Parent native/CI history remains in
 [the native findings](../recurring-problems-2026-10-18.md); this report owns benchmark
 history and the commit-hook isolation incident.
+
+## Further counterexamples and repair
+
+The next exact-head ARM job failed again with allocator page 65536, OS page 4096,
+requested/capacity 2621440 and differing allocation residues. Standalone pinned
+jemalloc C controls on Linux x64, LG_PAGE16 and LG_PAGE12, each completed all 32
+allocations without violations. Page-size mismatch alone is not a demonstrated cause.
+Failure-only safe VMA/THP observations and six helper tests preserve the original
+assertion. VMA snapshots are not extent-event history; actual ARM usable size remains
+unmeasured under the owning unsafe-code prohibition.
+
+Metadata CLI RED reproduced two variants overwriting one case record. Immutable
+physical-stem receipts now bind declared inputs, actual tools/flags and artifact
+bytes; missing receipts fail closed. Independent review then reproduced another
+counterexample: a median parsed as 0.01 was published while the unchanged receipt
+bound restored bytes containing 1.0. A separate diagnostic replacement race and
+ambient GOPORT_FAST override exposed the same boundary class. Consumers now use
+captured, verified bytes, and the producer rejects ambient fast-profile overrides
+before acquiring a measurement slot. Actual CLI regressions cover those cases.
+
+The declared closure excludes installed application dependencies and arbitrary
+semantic environment. Hash checking is integrity evidence, not signed provenance,
+a mutation sandbox or complete build attestation. Representative hashing overhead
+still needs measurement. The source budget now covers the two owning Rust diagnostic
+files as well as the Python tooling directories.

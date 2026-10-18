@@ -5,6 +5,8 @@ import argparse
 import re
 from pathlib import Path
 
+from lineage import admit
+
 RUST_TOOLS = ("tsc-rs", "tsc-rs-fast")
 ORACLE_TOOL = "tsc7"
 
@@ -49,11 +51,16 @@ def records(text: str, effect_only: bool = False) -> list[tuple[str, ...]]:
 
 
 def exit_codes(
-    results: Path, stem: str, required_tools=(RUST_TOOLS[0], ORACLE_TOOL)
+    results: Path,
+    stem: str,
+    required_tools=(RUST_TOOLS[0], ORACLE_TOOL),
+    *,
+    payload=None,
 ) -> dict[str, int]:
     """Read the preflight process evidence without trusting filtered diagnostics."""
     codes = {}
-    for line in (results / f"{stem}.errors").read_text().splitlines():
+    content = (results / f"{stem}.errors").read_bytes() if payload is None else payload
+    for line in content.decode().splitlines():
         match = re.fullmatch(r"(\S+) rc=(\d+) errors=(\d+)", line)
         if match is None or match[1] in codes:
             raise ValueError("malformed or duplicate process receipt")
@@ -75,20 +82,27 @@ def compare(
     rust_stem: str | None = None,
     oracle_stem: str | None = None,
     emit: bool = True,
+    rust_evidence=None,
+    oracle_evidence=None,
 ) -> None:
     try:
         if rust_tool not in RUST_TOOLS:
             raise ValueError("unsupported Rust variant")
-        codes, diagnostics = {}, {}
+        codes, diagnostics, identities = {}, {}, []
         for tool, source in [
             (rust_tool, rust_stem or stem),
             (ORACLE_TOOL, oracle_stem or stem),
         ]:
-            codes[tool] = exit_codes(results, source, required_tools=(tool,))[tool]
-            streams = [
-                (results / f"{source}.{tool}.{stream}").read_text()
-                for stream in ["stdout", "stderr"]
-            ]
+            evidence = rust_evidence if tool == rust_tool else oracle_evidence
+            if evidence is None:
+                evidence = admit(results, source, tool, stem)
+            if evidence.stem != source or evidence.tool != tool:
+                raise ValueError("selected evidence identity differs")
+            identities.append(evidence.input_identity)
+            codes[tool] = exit_codes(
+                results, source, required_tools=(tool,), payload=evidence.errors
+            )[tool]
+            streams = [evidence.stdout.decode(), evidence.stderr.decode()]
             if any(
                 re.search(r"^(?:unported|panic: )", text, re.MULTILINE)
                 for text in streams
@@ -102,15 +116,26 @@ def compare(
             diagnostics[tool] = sorted(
                 record for text in streams for record in records(text, effect_only)
             )
+        if len(set(identities)) != 1:
+            raise ValueError("selected input identities differ")
         if codes[rust_tool] != codes[ORACLE_TOOL]:
             raise ValueError("Rust/Go exit codes differ")
         if diagnostics[rust_tool] != diagnostics[ORACLE_TOOL]:
             raise ValueError("Rust/Go diagnostics differ")
-    except (OSError, UnicodeError, ValueError) as error:
+    except (
+        OSError,
+        UnicodeError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+    ) as error:
         # Never echo raw compiler output, paths or receipt rows on admission failure.
         reason = (
             "missing or unreadable evidence"
             if isinstance(error, (OSError, UnicodeError))
+            else "invalid evidence contract"
+            if isinstance(error, (KeyError, TypeError, AttributeError))
             else str(error)
         )
         raise SystemExit(
