@@ -1,10 +1,11 @@
 """Read-only premerge detector, not trusted enforcement or merge authorization.
 
-Checks the reviewed context/approval projection, not every protection setting.
-Requires the reviewed seven-context policy and provider-confirmed current approval.
-GitHub reviewDecision supplies latest-push policy evaluation; local review projection
-additionally requires an independent approval on the exact head. This reader cannot
-establish protected compiler acceptance, immutable workflow trust or artifact lineage.
+Projects the configured live review policy and exact seven required CI contexts,
+not a minimum admission policy or trusted technical review. A valid zero-count,
+last-push-disabled policy needs no approval. Otherwise GitHub reviewDecision must
+confirm approval and the local projection requires the configured number of current
+independent approvals. This reader cannot establish protected compiler acceptance,
+immutable workflow trust or artifact lineage.
 Review/job pagination completeness is not independently certified by gh JSON.
 No merge, protection change, credential output, raw provider errors or payload output.
 """
@@ -68,15 +69,18 @@ def _evaluate(data, expected_head, repo):
     contexts = protection["required_status_checks"]["contexts"]
     policy = protection["required_pull_request_reviews"]
     count = policy["required_approving_review_count"]
+    last_push = policy["require_last_push_approval"]
     if (
         set(contexts) != set(REQUIRED_CONTEXTS)
         or len(contexts) != len(REQUIRED_CONTEXTS)
         or type(count) is not int
-        or count < 1
-        or policy["require_last_push_approval"] is not True
+        or count < 0
+        or type(last_push) is not bool
     ):
         problems.add("protection_policy_drift")
-    if pr["reviewDecision"] != "APPROVED":
+        return sorted(problems)
+    required_approvals = max(count, int(last_push))
+    if required_approvals and pr["reviewDecision"] != "APPROVED":
         problems.add("provider_approval_missing")
     latest = {}
     for review in sorted(pr["reviews"], key=lambda r: r["submittedAt"]):
@@ -87,7 +91,7 @@ def _evaluate(data, expected_head, repo):
         and login.casefold() != pr["author"]["login"].casefold()
         for login, review in latest.items()
     )
-    if approvals < max(1, count):
+    if approvals < required_approvals:
         problems.add("independent_current_approval_missing")
     identities = {expected_head}
     if pr["potentialMergeCommit"]:

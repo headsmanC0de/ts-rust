@@ -12,11 +12,15 @@ import sys
 from pathlib import Path
 
 from verify import (
-    compare,
-    exit_codes,
     ORACLE_TOOL,
     RUST_TOOLS,
+    compare,
+    exit_codes,
+)
+from verify import (
     apps as APPS,
+)
+from verify import (
     projects as T3,
 )
 

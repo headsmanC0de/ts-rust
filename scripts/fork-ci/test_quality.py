@@ -2,23 +2,23 @@
 
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = ROOT / "scripts/fork-ci/quality.sh"
 RULE_FILES = (
     "AGENTS.md",
     "search-rules.md",
-    "tests.md",
-    "security.md",
-    "cybersecurity.md",
-    "design.md",
-    "guards.md",
+    "TESTS.md",
+    "SECURITY.md",
+    "CYBERSECURITY.md",
+    "DESIGN.md",
+    "GUARDS.md",
     "lefthook.yml",
 )
 MAX_SOURCE_LINES = 500
@@ -73,7 +73,7 @@ class QualityTests(unittest.TestCase):
 
     def test_safe_vector_execution_is_allowed(self):
         result = self.ruff(
-            "import subprocess\nsubprocess.run(['tool', '--version'], check=True)\n"
+            "import subprocess\n\nsubprocess.run(['tool', '--version'], check=True)\n"
         )
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
@@ -98,14 +98,23 @@ class QualityTests(unittest.TestCase):
                 uname = folder / "uname"
                 uname.write_text("#!/bin/sh\nprintf 'Darwin\\n'\n")
                 uname.chmod(0o700)
-            if timed_out:
-                timeout = folder / "timeout"
-                timeout.write_text("#!/bin/sh\nexit 124\n")
-                timeout.chmod(0o700)
+            timeout_log = folder / "timeouts"
+            timeout = folder / "timeout"
+            timeout.write_text(
+                "#!" + sys.executable + "\n"
+                "import json, os, pathlib, sys\n"
+                "with pathlib.Path(os.environ['TIMEOUT_LOG']).open('a') as log:\n"
+                "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                "if os.environ.get('TIMED_OUT') == '1': sys.exit(124)\n"
+                "os.execv('/usr/bin/timeout', ['timeout', *sys.argv[1:]])\n"
+            )
+            timeout.chmod(0o700)
             env = dict(
                 os.environ,
                 FORK_PYTHON=str(interpreter),
                 CHILD_LOG=str(child_log),
+                TIMEOUT_LOG=str(timeout_log),
+                TIMED_OUT="1" if timed_out else "0",
                 FAIL_CHILD="1" if fail else "0",
                 PATH=str(folder) + os.pathsep + os.environ["PATH"],
             )
@@ -126,6 +135,17 @@ class QualityTests(unittest.TestCase):
                 if child_log.exists()
                 else []
             )
+            timeouts = (
+                [json.loads(line) for line in timeout_log.read_text().splitlines()]
+                if timeout_log.exists()
+                else []
+            )
+            self.assertEqual(len(timeouts), 1 if timed_out else len(calls))
+            self.assertTrue(all(call[0] == "30" for call in timeouts))
+            self.assertEqual(
+                [call[2:] for call in timeouts],
+                calls if not timed_out else [["scripts/fork-ci/dependency_lock.py"]],
+            )
             return result, calls
 
     def assert_dispatch_contract(self, result, called):
@@ -133,6 +153,7 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(
             called,
             [
+                ["scripts/fork-ci/dependency_lock.py"],
                 ["-m", "ruff", "check", "--no-cache"],
                 ["-m", "ruff", "format", "--check", "--no-cache"],
                 [
@@ -160,7 +181,7 @@ class QualityTests(unittest.TestCase):
         rows = [json.loads(line) for line in result.stderr.splitlines()]
         self.assertEqual(
             [row["stage"] for row in rows if row["status"] == "passed"],
-            ["lint", "format", "workflow", "tests"],
+            ["dependencies", "lint", "format", "workflow", "tests"],
         )
         self.assertTrue(all(row["event"] == "quality.stage" for row in rows))
 
@@ -195,7 +216,7 @@ class QualityTests(unittest.TestCase):
         rows = [json.loads(line) for line in result.stderr.splitlines()]
         self.assertEqual(rows[-1]["status"], "failed")
         self.assertEqual(rows[-1]["exitCode"], 17)
-        self.assertEqual({row["stage"] for row in rows}, {"lint"})
+        self.assertEqual({row["stage"] for row in rows}, {"dependencies"})
 
     def test_timeout_cannot_become_pass(self):
         result, called = self.dispatch(timed_out=True)

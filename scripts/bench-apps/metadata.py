@@ -7,7 +7,7 @@ import os
 import platform
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 work = Path(sys.argv[1])
@@ -50,7 +50,7 @@ tools = {
     "bun": work / f"bun-{bun_platform}/bun",
 }
 metadata = {
-    "date": datetime.now(timezone.utc).isoformat(),
+    "date": datetime.now(UTC).isoformat(),
     "source": command("git", "rev-parse", "HEAD"),
     "compilerTree": command("git", "rev-parse", "HEAD:crates/ts_goport"),
     "run": f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}",

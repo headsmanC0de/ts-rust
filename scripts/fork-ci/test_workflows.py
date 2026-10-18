@@ -3,9 +3,9 @@
 import copy
 import hashlib
 import json
-from pathlib import Path
 import re
 import unittest
+from pathlib import Path
 
 import yaml
 
@@ -16,6 +16,8 @@ PUBLISH_GUARD = (
     + " && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
     + " && needs.version.outputs.release == 'true'"
 )
+NATIVE_WRAPPER_RUN = "python scripts/fork-ci/native_correctness.py"
+NATIVE_POOL_ENV = {"GOPORT_EMIT_THREADS": "${{ env.EMIT_POOL_FIXTURE_THREADS }}"}
 HOSTED_TEST_RUNNERS = [
     "ubuntu-24.04",
     "ubuntu-24.04-arm",
@@ -61,6 +63,15 @@ def ci_problems(ci):
         "docs/typechecker-state/current.json",
         "docs/fork-qualification.md",
         "AGENTS.md",
+        "search-rules.md",
+        "TESTS.md",
+        "GUARDS.md",
+        "DESIGN.md",
+        "SECURITY.md",
+        "CYBERSECURITY.md",
+        "lefthook.yml",
+        "ruff.toml",
+        ".editorconfig",
     }
     if not required_paths.issubset(set(ci["on"]["push"].get("paths", []))):
         problems.append("push misses an owning workflow input")
@@ -69,7 +80,9 @@ def ci_problems(ci):
     for name in ["lint", "wasm"]:
         if jobs[name]["runs-on"] != "ubuntu-24.04":
             problems.append(name + " needs accessible hosted Linux")
-    if jobs["test"].get("env", {}).get("GOPORT_EMIT_THREADS") != "2":
+    if jobs["test"].get("env", {}).get(
+        "EMIT_POOL_FIXTURE_THREADS"
+    ) != "1" or "GOPORT_EMIT_THREADS" in jobs["test"].get("env", {}):
         problems.append("hosted tests must exercise the parallel emit pool")
     if jobs["test"]["strategy"]["matrix"]["runner"] != HOSTED_TEST_RUNNERS:
         problems.append("test matrix must preserve all four OS/architecture cells")
@@ -77,6 +90,15 @@ def ci_problems(ci):
         job = jobs[name]
         steps = copy.deepcopy(job["steps"])
         for step in steps:
+            # Reviewed fixture adapter: the wrapper contract executes this exact original argv.
+            # Normalize only its complete expected step; extra flags/env/conditions still fail.
+            if name == "test" and step == {
+                "name": "Unit and integration tests",
+                "env": NATIVE_POOL_ENV,
+                "run": NATIVE_WRAPPER_RUN,
+            }:
+                step.pop("env")
+                step["run"] = "cargo test --release --locked --workspace --no-fail-fast"
             if "uses" in step:
                 step["uses"] = step["uses"].split("@")[0]
                 if name == "test" and step["uses"] == "Swatinem/rust-cache":
@@ -156,6 +178,20 @@ class ForkWorkflowContracts(unittest.TestCase):
     def test_actual_ci_has_accessible_pinned_coverage_and_fast_contracts(self):
         self.assertEqual(ci_problems(load_workflow("ci")), [])
 
+    def test_native_correctness_declares_bounded_fixture_pool_only_here(self):
+        ci = load_workflow("ci")
+        native = ci["jobs"]["test"]
+        self.assertEqual(native["env"].get("EMIT_POOL_FIXTURE_THREADS"), "1")
+        self.assertNotIn("GOPORT_EMIT_THREADS", native["env"])
+        for step in native["steps"]:
+            pool = step.get("env", {}).get("GOPORT_EMIT_THREADS")
+            if step.get("name") == "Unit and integration tests":
+                self.assertEqual(step.get("env"), NATIVE_POOL_ENV)
+                self.assertEqual(step["run"], NATIVE_WRAPPER_RUN)
+            else:
+                self.assertIsNone(pool)
+        self.assertNotIn("GOPORT_EMIT_THREADS", ci["env"])
+
     def test_actual_inherited_service_entrypoints_exclude_fork_execution(self):
         self.assertEqual(
             upstream_problems(
@@ -183,10 +219,15 @@ class ForkWorkflowContracts(unittest.TestCase):
                 for s in x["jobs"]["test"]["steps"]
                 if s.get("uses", "").startswith("Swatinem/rust-cache@")
             )["with"].pop("cache-workspace-crates"),
-            lambda x: x["jobs"]["test"]["env"].pop("GOPORT_EMIT_THREADS", None),
+            lambda x: x["jobs"]["test"]["env"].pop("EMIT_POOL_FIXTURE_THREADS", None),
             lambda x: x["jobs"]["test"]["strategy"]["matrix"]["runner"].pop(),
             lambda x: x["jobs"]["wasm"].update({"if": "false"}),
             lambda x: x["jobs"]["lint"].update({"needs": "workflow-contracts"}),
+            lambda x: next(
+                s
+                for s in x["jobs"]["test"]["steps"]
+                if s.get("name") == "Unit and integration tests"
+            ).update({"if": "false"}),
             lambda x: next(s for s in x["jobs"]["lint"]["steps"] if "run" in s).update(
                 {"if": "false"}
             ),

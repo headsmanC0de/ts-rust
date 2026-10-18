@@ -1,11 +1,11 @@
 import hashlib
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 INSTALLER = Path(__file__).resolve().parents[1] / "git-hooks" / "install.sh"
 SOURCE_HOOK = INSTALLER.with_name("pre-push")

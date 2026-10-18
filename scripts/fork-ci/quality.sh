@@ -30,6 +30,7 @@ run_stage() {
   printf '{"event":"quality.stage","stage":"%s","status":"passed","exitCode":0,"elapsedSeconds":%d}\n' "$stage" "$((SECONDS - started))" >&2
 }
 
+run_stage dependencies "$FORK_PYTHON" scripts/fork-ci/dependency_lock.py
 run_stage lint "$FORK_PYTHON" -m ruff check --no-cache
 run_stage format "$FORK_PYTHON" -m ruff format --check --no-cache
 run_stage workflow "$FORK_PYTHON" -m unittest discover -s scripts/fork-ci -p 'test_*.py' -v

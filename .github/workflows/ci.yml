@@ -22,6 +22,15 @@ on:
       - "docs/typechecker-state/current.json"
       - "docs/fork-qualification.md"
       - "AGENTS.md"
+      - "search-rules.md"
+      - "TESTS.md"
+      - "GUARDS.md"
+      - "DESIGN.md"
+      - "SECURITY.md"
+      - "CYBERSECURITY.md"
+      - "lefthook.yml"
+      - "ruff.toml"
+      - ".editorconfig"
 
 permissions:
   contents: read
@@ -102,8 +111,8 @@ jobs:
     env:
       # One test thread, as goport-tests.sh runs them.
       RUST_TEST_THREADS: 1
-      # Hosted runners can have fewer cores than checker threads; still exercise the pool.
-      GOPORT_EMIT_THREADS: 2
+      # Pool fixtures require actual workers even on small hosted runners.
+      EMIT_POOL_FIXTURE_THREADS: 1
     steps:
       # LF in the working tree, as on the other hosts: Git for Windows sets core.autocrlf=true, which
       # gives the test fixtures and the scripts CRLF (README.md, "Develop on Windows").
@@ -162,7 +171,9 @@ jobs:
           cargo test --release --locked --workspace --no-run
           cargo test --release --locked -p ts_goport --test go_baselines --no-run
       - name: Unit and integration tests
-        run: cargo test --release --locked --workspace --no-fail-fast
+        env:
+          GOPORT_EMIT_THREADS: ${{ env.EMIT_POOL_FIXTURE_THREADS }}
+        run: python scripts/fork-ci/native_correctness.py
       # go_baselines has `test = false`, so --workspace skips it. TestLocal (about 12,700 compiler
       # cases) runs in 4 shards in goport-tests.sh, in the revision pipeline; the rest of the default
       # go_baselines set runs here, also after a failed unit test.

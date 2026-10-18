@@ -148,14 +148,73 @@ class PremergeDetector(unittest.TestCase):
             mutate(data["pr"])
             self.assertTrue(evaluate(data, HEAD, "owner/repo"))
 
-    def test_honors_stricter_provider_review_policy_fail_closed(self):
-        for policy in [
-            {"required_approving_review_count": 2},
-            {"require_last_push_approval": False},
+    def test_live_zero_review_policy_allows_no_provider_or_local_approval(self):
+        data = fixture()
+        data["protection"]["required_pull_request_reviews"].update(
+            required_approving_review_count=0, require_last_push_approval=False
+        )
+        data["pr"].update(reviewDecision=None, reviews=[])
+        self.assertEqual(evaluate(data, HEAD, "owner/repo"), [])
+
+    def test_zero_review_policy_keeps_exact_ci_and_source_requirements(self):
+        for mutate in [
+            lambda d: d["checks"].pop(),
+            lambda d: d["checks"][0].update(conclusion="skipped"),
+            lambda d: d["pr"].update(headRefOid=MERGE),
+            lambda d: d["runs"]["123"]["pull_requests"][0].update(number=2),
         ]:
             data = fixture()
-            data["protection"]["required_pull_request_reviews"].update(policy)
+            data["protection"]["required_pull_request_reviews"].update(
+                required_approving_review_count=0, require_last_push_approval=False
+            )
+            data["pr"].update(reviewDecision=None, reviews=[])
+            mutate(data)
             self.assertTrue(evaluate(data, HEAD, "owner/repo"))
+
+    def test_positive_count_without_last_push_requires_configured_approvals(self):
+        data = fixture()
+        policy = data["protection"]["required_pull_request_reviews"]
+        policy.update(
+            required_approving_review_count=1, require_last_push_approval=False
+        )
+        self.assertEqual(evaluate(data, HEAD, "owner/repo"), [])
+        policy["required_approving_review_count"] = 2
+        self.assertIn(
+            "independent_current_approval_missing", evaluate(data, HEAD, "owner/repo")
+        )
+        second = copy.deepcopy(data["pr"]["reviews"][0])
+        second["author"]["login"] = "second-reviewer"
+        data["pr"]["reviews"].append(second)
+        self.assertEqual(evaluate(data, HEAD, "owner/repo"), [])
+        data["pr"]["reviewDecision"] = "REVIEW_REQUIRED"
+        self.assertIn("provider_approval_missing", evaluate(data, HEAD, "owner/repo"))
+
+    def test_last_push_requires_one_current_independent_provider_approval(self):
+        data = fixture()
+        data["protection"]["required_pull_request_reviews"].update(
+            required_approving_review_count=0, require_last_push_approval=True
+        )
+        self.assertEqual(evaluate(data, HEAD, "owner/repo"), [])
+        data["pr"]["reviews"] = []
+        self.assertIn(
+            "independent_current_approval_missing", evaluate(data, HEAD, "owner/repo")
+        )
+        data["pr"]["reviewDecision"] = None
+        self.assertIn("provider_approval_missing", evaluate(data, HEAD, "owner/repo"))
+
+    def test_invalid_live_review_policy_is_rejected(self):
+        for field, value in [
+            ("required_approving_review_count", -1),
+            ("required_approving_review_count", True),
+            ("required_approving_review_count", "0"),
+            ("require_last_push_approval", None),
+            ("require_last_push_approval", 0),
+            ("require_last_push_approval", "false"),
+        ]:
+            with self.subTest(field=field, value=value):
+                data = fixture()
+                data["protection"]["required_pull_request_reviews"][field] = value
+                self.assertTrue(evaluate(data, HEAD, "owner/repo"))
 
     def test_malformed_payload_does_not_escape_or_expose_payload(self):
         for data in [{}, None, {"pr": "secret://password"}]:
