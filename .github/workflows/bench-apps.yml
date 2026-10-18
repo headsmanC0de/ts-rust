@@ -36,6 +36,7 @@ env:
 
 jobs:
   plan:
+    if: github.repository == 'pingdotgg/ts-rust'
     runs-on: ubuntu-latest
     outputs:
       prepare: ${{ steps.plan.outputs.prepare }}
