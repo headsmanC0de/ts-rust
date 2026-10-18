@@ -16,7 +16,21 @@ on:
       - "Cargo.lock"
       - "UPSTREAM.json"
       - "scripts/upstream/pin.py"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/**"
+      - "scripts/**"
+      - "npm/wasm/**"
+      - "docs/typechecker-state/current.json"
+      - "docs/fork-qualification.md"
+      - "AGENTS.md"
+      - "search-rules.md"
+      - "TESTS.md"
+      - "GUARDS.md"
+      - "DESIGN.md"
+      - "SECURITY.md"
+      - "CYBERSECURITY.md"
+      - "lefthook.yml"
+      - "ruff.toml"
+      - ".editorconfig"
 
 permissions:
   contents: read
@@ -28,22 +42,44 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
+  CARGO_BUILD_JOBS: 2
   RUSTFLAGS: -C debuginfo=0
   # The toolchain of shipped bins (release.yml), the candidate evidence, fmt and clippy
   # (scripts/goport/README.md, "Build toolchain").
   RUSTUP_TOOLCHAIN: 1.95.0
 
 jobs:
+  workflow-contracts:
+    name: Fork configuration contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install isolated workflow test dependency
+        run: >-
+          python -m pip install --only-binary=:all: --require-hashes -r scripts/fork-ci/requirements.txt
+      - name: Run tooling quality contract
+        env:
+          FORK_PYTHON: python
+        run: bash scripts/fork-ci/quality.sh
+
   lint:
     name: fmt, codegen, clippy
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal -c rustfmt,clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all -- --check
@@ -59,13 +95,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Blacksmith runners (the pingdotgg org has the app), as T3 Code uses. The Windows runner
-        # builds x86_64-pc-windows-msvc.
+        # GitHub-hosted runners are available to the controlled fork without upstream provider access.
+        # Preserve Linux x64/arm64, macOS arm64 and Windows x64 coverage.
         runner:
-          - blacksmith-16vcpu-ubuntu-2404
-          - blacksmith-16vcpu-ubuntu-2404-arm
-          - blacksmith-12vcpu-macos-26
-          - blacksmith-16vcpu-windows-2025
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-26
+          - windows-2025
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     # Git Bash on Windows.
@@ -75,12 +111,14 @@ jobs:
     env:
       # One test thread, as goport-tests.sh runs them.
       RUST_TEST_THREADS: 1
+      # Pool fixtures require actual workers even on small hosted runners.
+      EMIT_POOL_FIXTURE_THREADS: 1
     steps:
       # LF in the working tree, as on the other hosts: Git for Windows sets core.autocrlf=true, which
       # gives the test fixtures and the scripts CRLF (README.md, "Develop on Windows").
       - if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # main's Go pin is the saved state's batch.upstreamPin.to. UPSTREAM.json "current" can be an older
@@ -95,7 +133,7 @@ jobs:
           "$py" scripts/upstream/pin.py show ${key:+"$key"} > "$RUNNER_TEMP/pin.json"
           jq -r '"repo=\(.repo)", "commit=\(.commit)", "subdir=\(.subdir // "")"' "$RUNNER_TEMP/pin.json" >> "$GITHUB_OUTPUT"
       - name: Check out the pinned Go source
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ steps.pin.outputs.repo }}
           ref: ${{ steps.pin.outputs.commit }}
@@ -121,15 +159,21 @@ jobs:
           curl -sSfL "$url" | tar xz -C go-pin/node_modules/typescript --strip-components=1
           jq -r .version go-pin/node_modules/typescript/package.json
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          prefix-key: "v1-fork-workspace"
+          cache-workspace-crates: "true"
+          cache-bin: "false"
+          save-if: "${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}"
+          cache-on-failure: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}"
       - name: Build
         run: |
           cargo test --release --locked --workspace --no-run
           cargo test --release --locked -p ts_goport --test go_baselines --no-run
       - name: Unit and integration tests
-        run: cargo test --release --locked --workspace --no-fail-fast
+        env:
+          GOPORT_EMIT_THREADS: ${{ env.EMIT_POOL_FIXTURE_THREADS }}
+        run: python scripts/fork-ci/native_correctness.py
       # go_baselines has `test = false`, so --workspace skips it. TestLocal (about 12,700 compiler
       # cases) runs in 4 shards in goport-tests.sh, in the revision pipeline; the rest of the default
       # go_baselines set runs here, also after a failed unit test.
@@ -149,7 +193,7 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Windows' }}
         id: go
         run: jq -r '"version=\(.oracle.go | ltrimstr("go"))"' "$RUNNER_TEMP/pin.json" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: ${{ !cancelled() && runner.os == 'Windows' }}
         with:
           go-version: ${{ steps.go.outputs.version }}
@@ -175,17 +219,17 @@ jobs:
   # #83). Its repro is a test in npm/wasm/test/tsc.test.mjs.
   wasm:
     name: wasm
-    runs-on: blacksmith-16vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal -t wasm32-wasip1
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
       # The release profile and no wasm-opt: about 1.5 minutes on 32 vCPU with no cache.

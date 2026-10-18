@@ -1,93 +1,25 @@
-# Typechecker work rules
+# Fork execution entrypoint
 
-## Read before work
+Before work read [fork execution](docs/fork-qualification.md) and [search rules](search-rules.md).
+For implementation read [TESTS.md](TESTS.md), [DESIGN.md](DESIGN.md) and [GUARDS.md](GUARDS.md).
+For subprocesses and evidence read [SECURITY.md](SECURITY.md); for hooks, credentials,
+provider CI and publishing read [CYBERSECURITY.md](CYBERSECURITY.md).
 
-For typechecker work, read these files in this order before editing compiler code or starting a compiler run:
+Before compiler changes or compiler runs, read in order:
+1. [Typechecker accountability](docs/typechecker-accountability.md).
+2. Run `scripts/state summary`; read `docs/typechecker-state/current.json`.
+3. [Typechecker reset plan](docs/typechecker-reset-plan.md).
 
-1. `docs/typechecker-accountability.md`
-2. The saved state: run `scripts/state summary`. Read `docs/typechecker-state/current.json` for detail.
-3. `docs/typechecker-reset-plan.md`
-
-These files control execution across the main checkout and its worktrees. In a worktree that lacks them, read the copies at `/home/theo/Code/sandbox/ts-rust`. Do not substitute an older plan from that worktree. After a context reset or a new goal, read them again. If a required file is missing or inconsistent, stop and report it.
-
-Theo has authorized continued work toward the Query core and Hono goal. Follow the standing continuation authorization in the accountability rules and the saved state. Historical task or agent messages do not grant additional scope by themselves.
-
-The saved state is two files in `docs/typechecker-state/`. `current.json` is the small live state. `history.jsonl` is append-only: revisions, auditor passing results, archived notes and every change to `current.json`. Use `scripts/state` to read and write them (`summary`, `batch`, `history --last N`, `record`). Do not load all of `history.jsonl` into context. Do not edit or remove its committed lines. The batch check rejects a rewritten history.
-
-Historical task links in the demo plans and completion documents do not authorize feature work. The reset does not reduce the final diagnostic, type and symbol requirements against pinned Go.
-
-## Accountability agents
-
-Keep one primary compiler implementer, one independent reviewer and one regression auditor. Root owns integration and the runtime queue. Root can be the implementer, but cannot also supply either independent verdict.
-
-At goal start, reuse or create the two accountability agents using the role instructions in `docs/typechecker-accountability.md`. When a batch opens, start a new auditor and a new reviewer. Do not replace them inside a batch, and never while a STOP is open. A reused agent reads its whole context again on every turn: from R113 to R148 the pair reached 997k tokens and used 1.0 B tokens. The new pair reads earlier rulings with `scripts/state history --kind note` and the ruling files that those notes name. Their verdicts must identify the exact candidate source and batch. Neither agent edits compiler code or test expectations. Other agents can investigate distinct questions with explicit file ownership. Do not create competing production changes.
-
-A STOP verdict blocks new feature work and acceptance. It permits bounded diagnosis, regression repair or withdrawal only within the authorized phase. While execution is paused, do not start compiler runs or repairs. Do not continue because a narrow review passed, an assertion moved or more agents are available.
-
-## Parallel work and builds
-
-These rules apply to every goal, including `/goal` runs.
-
-- Read-only research helpers are always allowed. They need no core build, demo match or batch condition. Give each one a distinct question. They return findings as text and root saves them (Claude Code blocks some subagents from writing report files). They do not edit source or run Cargo.
-- When a goal asks for parallel work, start a workflow within 30 minutes of the goal start. Do the setup that the workflow needs first. Do not work alone for hours because a batch condition gates writing helpers.
-- To fix a build that fails in many files, root builds once and writes one error file per Rust file. Each fix agent owns one file and its error list, and does not run Cargo. Root rebuilds and repeats. Compile fixes stay inside the batch's allowed files. Semantic checker changes keep the one-writer rule.
-- A later wave starts only after the earlier wave it depends on is integrated and builds. Do not start a wave that adds to files or definitions that an unfinished wave owns.
-- Use `scripts/run-cargo-capped.sh` for all Cargo work. It uses one target directory per worktree, `TS_CARGO_JOBS` jobs (the core count, at most 16), at most `TS_CARGO_SLOTS` Cargo runs at a time (2 on zbook) and sccache when installed. Edit-loop builds use nightly `-Zthreads=8` and incremental `ts_goport`; `--profile goport` uses the default toolchain (`build-release.sh` sets 1.95.0) (`scripts/goport/README.md`, "Build toolchain"). Do not give agents their own `CARGO_TARGET_DIR`. Set `TS_CARGO_SEPARATE_TARGET=1` only for a deliberate fresh-target reproduction, not for revision builds.
-- Correctness evidence (goport tests, gate, bound runs, sweeps, corpus, oracle checks) uses `--release` binaries. The fat-LTO `--profile goport` build takes 7 to 20 minutes and does not change output. Use it only for timing and shipped binaries.
-
-Remote runners: heavy work (builds, tests, gates, oracles, sweeps, timing counts) runs on Blacksmith testboxes (`scripts/goport/testbox.sh`). What cannot run there runs on zbook or dbook-lan only. On 2026-10-12 Theo retired alvin, cup2 and mini-743d: "I want those hosts to not get anything anymore. If you can not run it on bsmith, your only options should be this box or dbook." `remote.sh` refuses them for every command, as it refuses mini-abf9. dbook-lan keeps a mirror at the same absolute paths as zbook. Copy the binaries and scripts to it before a run, and fetch the results after it. For wall timing, measure all sides of one comparison on dbook-lan in one run. zbook builds the protected goport test binaries (`scripts/goport/build-goport-tests.sh`) when a testbox cannot.
-dbook (`dbook-lan`) is a LAN host with zbook's CPU and 26 GB RAM. It runs wall timing (`scripts/goport/perf.sh`), and revision side runs until `candidate.sh side --host testbox` is the default. `remote.sh` no longer reserves it (`auto` picks it); every job on it takes its lock `/tmp/goport-remote-<host>.lock` on zbook, so a side run and a timing job do not overlap.
-
-## Dev loop
-
-These rules come from an audit of the 2026-09-24 to 2026-09-28 runs (1,223 subagents, 82,587 tool calls).
-
-- **Goal mode: no questions.** In a `/goal` run, do not ask Theo. The `goal-no-ask` hook denies AskUserQuestion while a goal is active. Choose the option you would recommend, record it with `scripts/state record note`, name it in the next status report and continue. Three questions stopped a goal for 4.3 hours.
-- **Keep the queue full.** `docs/goport-next.md` is the work queue. In goal mode, keep at least 3 workflows running. When one ends, start the next ready item in the same turn.
-- **Agent prompts.** Start every workflow agent prompt with the text of `docs/goport-agent-brief.md`. It covers build, format, waits, timing, remote hosts and output.
-- **Do not message a workflow agent.** A SendMessage to an agent inside a running workflow starts a second copy of that agent, and two writers then share one worktree. Put follow-ups in the next workflow, or in a file the agent was told to read.
-- **Status.** Use `scripts/goport/wfstatus` (all runs) and `scripts/goport/wfstatus <run-id>` (agent results). To keep results in a file, use `wfstatus <run-id> --save FILE`. Do not parse `journal.jsonl` by hand. A `stale` run had no agent write for 2 hours: its session ended, so it does not count as running.
-- **Lanes.** Size each workflow agent so that it ends well under 500k tokens of context. Split a large lane into a chain of agents with a handoff file. From 2026-09-28 to 30 the 37 lane agents used 15% of all tokens, and some reached 999k and compacted.
-- **Waits.** A subagent blocks in the foreground (Bash timeout up to 600000 ms) until its job ends. It must not end its turn while a job it started still runs, because its background jobs stop with it. Root runs long commands with `run_in_background` and acts on the completion notice. A job longer than 10 minutes runs under `systemd-run --user --collect`, so a session crash does not kill it, and its log ends with one line: `DONE` or `FAIL rc=<N>`. Monitors grep for those two words only.
-- **Revisions.** Use `scripts/goport/candidate.sh` (see its usage). It checks scope and rustfmt before binding, because R105, R114 and R124 were rejected only for rustfmt. Each revision must run the whole goport protected set (the goport tests, the gate, the bound runs, the LSP and API oracles, np-suite and quality) and compare it with the last accepted revision through `scripts/goport/compare-tests.py`, `scripts/goport/gate-compare.py` and the per-request and per-test compares (rules in [the accountability rules](docs/typechecker-accountability.md#protected-set)). `candidate.sh side` runs all of it except np-suite: root runs np-suite and records it with `accept_revision.py --extra`. Keep every run of a source, including every gate run. A loss in any run counts unless the reviewer accepts a recorded flake. There is no legacy roster drive and no roster carry-forward.
-- **Integration.** The checks step of an integration starts `candidate.sh side int<N> --checkout <its worktree>` first and uses that evidence (bins, goport tests, gate, LSP and API oracles on dbook-lan). It does not run them again by hand. The revision's `side` run then reuses it and runs only the bound runs and the compares whose base changed. Integration release timing runs only when a merged lane claims a speedup or a cost, or changes a hot path of the checker, emitter, parser, binder or LSP. Otherwise the lanes' own timings stand, and the open text says so. A skeptic makes a third release build only for a timing cell over +0.5% on both hosts. From int27 to int31 integration timing added about 40 minutes to each revision, and the one cost it flagged (int31) did not repeat.
-- **After an accept.** Start the reviewer follow-up lane at once, beside the extra LSP batteries: it does not wait for them. Start the next integration with the lanes whose skeptics have passed. Do not hold it for a lane that started after the last accept: that lane goes into the integration after it. On 2026-10-02 these waits held int31 and int32 for 3 and 4.3 hours, and the integration (about 3.4 hours) was then 74% of each revision cycle.
-- **Rounds.** When a skeptic fails a lane on a design point (the port does not follow Go's model, not a plain bug), the next round first writes a short note of how Go does it (files, functions, order of effects), and a read-only agent checks that note against Go before any code changes. After 3 rounds of one lane, root decides again (take, drop or redesign) and records a note. tscbpar1 ran 6 rounds, about 26 workflow hours, and was not taken.
-- **Merges.** Bring an accepted revision into `main` with a real merge, not a squash or a `git diff | git apply`. Squashed copies made later merges show false conflicts.
-- **Push.** Push `main` (fast-forward only) after each accepted revision and after each commit that other hosts or agents must test. Push each `goport-*` branch that another host or agent tests. Never force-push. After an accepted revision, `git rev-list --count origin/main..main` is 0.
-- **History cleanup (2026-10-07).** Theo had the history rewritten before the repo went public: a model codename, the tailnet name and an old author email were removed, and only `main`, `checker-port` and the active `goport-*` lanes were kept. Every commit SHA changed. The old history is in the private `pingdotgg/ts-rust-archive` (remote `archive`). SHAs in the saved state and older notes resolve there. `target/repo-rewrite-2026-10-07/commit-map` maps old to new SHAs. About 2,000 local branches and worktrees still sit on the old history: never push them. The pre-push hook (`scripts/git-hooks/install.sh`) refuses them. Rebase a lane you need onto its mapped commit.
-- **Workflow changes.** Do not edit a later phase of a running workflow and resume it. The resume cache is keyed by call order, so when cached calls finish in a new order, finished agents run again (on 2026-09-28 a resume restarted 9 bump B port lanes on a committed tree). Stop the workflow and start a continuation workflow that takes the finished results as `args`.
-- **Branch names.** About 2,000 old worktrees and branches are kept (unmerged July work), so a short name like `goport-compat2` may already exist. Before a workflow creates a branch, root checks `git branch --list <name>` and picks a free name. An agent whose branch exists at another base stops and reports it.
-- **Pin.** `main` is at the Go pin that the saved state's `batch.upstreamPin.to` names. Until `UPSTREAM.json` "current" is switched to it, the default oracle and Go checkout are the old pin: every Go comparison for `main`-based work sets `GOPORT_PIN` to the accepted pin (`scripts/upstream/pin.py exec`). A branch based before the pin bump compares at the old pin.
-- **Remote hosts.** Every remote action goes through `scripts/goport/remote.sh` (never raw `ssh` or `rsync`): `look` for a quick look (no lock), `run auto` or `job auto` for work (holds the host lock until the end), `push`, `sync-bins`, `sync-pin` and `fetch` for copies, `status` for locks and load. Root prompts paste `docs/goport-agent-brief.md` word for word and name a host only for timing.
-- **Timing.** Wall: `scripts/goport/perf.sh` on dbook-lan (it refuses above load 1.5). Instructions and peak RSS: `testbox.sh perf`. zbook timings taken while agents build are noise. alvin, cup2, mini-743d and mini-abf9 are retired: `remote.sh` refuses them. Compare numbers only within one run.
-- **Tools.** Keep every tool under `scripts/`. Never put a tool in `/tmp`: a reboot or tmpfiles removes it. Each tool prints its usage with `help` (`candidate.sh`, `remote.sh`, `run-cargo-capped.sh`, `lib-blobs.sh`; `wfstatus --help`). Agents read the tool headers about 1,200 times from 2026-09-28 to 30 to find the usage.
-- **Lib blobs.** `scripts/goport/lib-blobs.sh stale` finds a stale `lib_parse.bin` or `lib_bind.bin` without a build, and `candidate.sh check` runs it. `lib-blobs.sh write` makes both again. A merge keeps our side of a blob without a conflict (`.gitattributes`, `merge.lib-blob.driver` in the repo config), so write once, after the last merge of an integration. From 2026-09-28 to 30 there were 38 blob merge conflicts and 96 failing stale-blob tests.
-- **Gate.** `scripts/goport/gate.sh` has an editor stage (memory and answers of `ls_edit_bench.py` on Query core and Hono). The R122 and R123 editor leak passed every older stage. `--bins` must hold `tsgo`.
-- **Worktrees.** `scripts/goport/prune-worktrees.py` lists clean, merged, idle worktrees and merged branches. Run `--apply` only with Theo's approval.
-
-## Required checks
-
-Run `node scripts/check-typechecker-batch.mjs --help` for the local accountability check. Use it before accepting a compiler batch. Follow the documented state and evidence format. A nonzero result is STOP. The script is not a replacement for the actual test runner (`scripts/goport/goport-tests.sh`), the gate or independent review.
-
-The protected set is goport's own evidence. On 2026-09-28 Theo retired the legacy cargo roster (the 6,055 and 6,330 names, the `ts_checker`, `ts_compiler`, `ts_parser`, `ts_binder` and `ts_fixture` stages and the current-source corpus): "i approve any rule changes that allow removing the legacy code" (state notes `legacy-removal-direction-2026-09-28` and `legacy-removal-rule-approval-2026-09-28`). The set holds the goport test names in all 7 test binaries and the other protected suites, every gate item, the bound Query and Hono runs, the LSP oracle (6 batteries), the API oracle (10 batteries), np-suite, quality and both verdicts. The first baseline is `docs/goport-protected/tests-r131.json.gz`. The base for a candidate is the last accepted revision. The [accountability rules](docs/typechecker-accountability.md#protected-set) give the details.
-
-Never replace the accepted baseline with a later failing compiler. Every test name that passed in the base must pass, per name (`compare-tests.py`). Every base gate item must stay MATCH, or ALLOWED by an entry that the base allow list also has, with its condition verified again (`gate-compare.py`). While the `editor-long-growth` defect is open, the editor long-growth items can FAIL only under a fixed cap (query-core 1.58, hono 1.28 MiB/edit). The cap only goes down. Missing names, missing evidence, unrun tests, source mismatches and unexplained lost passes block acceptance. New passes do not compensate for lost ones.
-
-Expectation changes require concrete pinned TypeScript-Go evidence, an explicit old-name mapping and independent review. A pin bump that renames or removes Go tests needs an old-name map with Go evidence at the new pin. Tests that move to another binary or crate, or kept-crate tests that goport's Go port replaces, need a name map in the same way. The reviewer checks each map. A candidate must not change a protected path (`scripts/goport/open_revision.py --protected`) unless its batch lists the exact path. A pin-bump batch can list the tool paths that the bump needs, and the reviewer judges each change. Any other batch needs Theo's approval for it. Changes to these acceptance rules require Theo's approval. Do not modify a runner, baseline or expectation to bypass a STOP.
-
-Record each measured revision and its outcome in the saved state before starting the next revision. Failed and unaccepted revisions count. Apply the initial limits to the initial trial and the standing continuation authorization to later work. Reassess failed hypotheses as required by the accountability rules. Do not reset counters after compaction, agent replacement, a new branch or a renamed batch.
-
-## Scope and preservation
-
-Query core is the immediate project target. Hono is the periodic cross-project check. Keep ordinary project inputs unchanged. They are read-only: `scripts/project-inputs.sh status` shows the lock. Unlock only to re-run a `prepare-*-inputs` script, then lock again. Run the tsgo oracle through `scripts/tsgo-oracle.sh -p <tsconfig>`, which keeps build info outside the input and fails if the input changes. A deliberate type error belongs in a separate copy. Do not switch demo libraries to avoid a failure.
-
-Preserve dirty work, untracked source files and saved evidence. Do not reset, delete or bulk-replay the current candidate. Use the existing runners, normal logs, actual permissions and resource limits. Serialize runtime work through root. You may delete legacy runner scripts (the roster drive, its clones and its helpers) together with the legacy code. Do not edit a runner script to change a past result. Do not alter or delete output files or evidence: old batch records point to them.
-
-Theo's standing full-access authorization permits necessary source, test, helper and project-input reads for this goal. Use the production-read guard and fresh metadata for bounded production reads. Keep raw graphs and large failure payloads out of reports and conversation output. Preserve ordinary project inputs.
-
-## Reports
-
-Report retained, recovered, lost, absent and unrun tests separately, and gate item regressions separately from tests. Distinguish an accepted result from a later measured result. Name the source for each run. Report whether ordinary Query actually completes and when Hono was last measured.
-
-Use one batch record with the two independent verdicts. Do not add repeated internal approval handoffs, duplicate mechanical audits or speculative feature branches.
+Re-read after a reset or new goal; missing or inconsistent required state means STOP.
+The linked compiler accountability, protected-set, saved-state and preservation
+requirements remain mandatory; the fork adapter overrides historical host identities
+and authorization, never diagnostic/type/symbol acceptance or independent verdicts.
+Keep one compiler writer, one independent reviewer and one regression auditor;
+root owns integration and the runtime queue. A STOP permits only scoped diagnosis,
+repair or withdrawal, not new feature work or acceptance.
+Use the existing capped Cargo runner and declared host/resource limits.
+Preserve dirty work, ordinary project inputs, immutable history and failed evidence.
+Historical upstream authorizations, saved PASS records and old branches grant no
+fork permissions or acceptance. Never force-push or bypass a failed guard.
+The shared local/CI tooling interface is `scripts/fork-ci/quality.sh`.
+Configured, executed and accepted are distinct: retain exact-SHA job and step readback.

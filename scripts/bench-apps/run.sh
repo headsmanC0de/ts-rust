@@ -24,6 +24,7 @@ trpc-server trpc packages/server/tsconfig.json'
 source "$(cd -- "$(dirname -- "$0")" && pwd)/common.sh"
 bench_tools "$work"
 TS6="node --max-old-space-size=16384 $work/node_modules/ts6/lib/tsc.js"
+tool_artifacts=("$(command -v node)"$'\n'"$work/node_modules/ts6/lib/tsc.js" "$GO" "$RS" "$RS" "$BUN")
 names=(tsc6 tsc7 tsc-rs tsc-rs-fast bun)
 sel=()
 for i in "${!names[@]}"; do [[ " ${TOOLS:-${names[*]}} " == *" ${names[$i]} "* ]] && sel+=("$i"); done
@@ -36,5 +37,5 @@ while read -r app dir cfg; do
   cmds=("$TS6 $flags --pretty false" "$GO $flags --pretty false" "$RS $flags --pretty false"
         "$RS $flags --fast --pretty false" "$BUN check $flags --no-pretty --all")
   cd "$work/repos/$dir"
-  bench_measure "$work/results/$app$tag" "${cmds[@]}"
+  BENCH_PROJECT_ROOT="$work/repos/$dir" BENCH_CONFIG="$PWD/$cfg" bench_measure "$work/results/$app$tag" "${cmds[@]}"
 done <<<"$APPS"

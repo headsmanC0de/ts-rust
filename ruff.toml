@@ -1,0 +1,5 @@
+target-version = "py312"
+include = ["scripts/bench-apps/*.py", "scripts/fork-ci/*.py"]
+
+[lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "S102", "S307", "S602", "S110", "S112", "PLR2004"]

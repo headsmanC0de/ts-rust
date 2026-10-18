@@ -25,6 +25,9 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{Arc, Barrier, mpsc};
 use std::time::{Duration, Instant};
 
+#[path = "common/allocator_geometry.rs"]
+mod allocator_geometry;
+
 use tikv_jemalloc_ctl::{Access, AsName};
 use ts_goport::jemalloc_layout::{ArenaClaims, HOLDER_NAME, jemalloc_layout};
 
@@ -41,6 +44,7 @@ const EXEC_PARENT: &str = "JEMALLOC_LAYOUT_TEST_EXEC_PARENT";
 const EXEC_ARGS: &str = "JEMALLOC_LAYOUT_TEST_EXEC_ARGS";
 
 const MIB: usize = 1 << 20;
+const GROW_ALIGNMENT: usize = 2 * MIB;
 
 /// The size and number of the blocks that `layout_from_inside` makes in
 /// each arena.
@@ -105,6 +109,37 @@ fn layout_from_inside() {
                 .is_some_and(|last| last.as_ptr().wrapping_add(BLOCK) == block.as_ptr());
             if n > 0 && !follows {
                 grows += 1;
+                if !on_2mib(block.as_ptr()) {
+                    // Diagnose a failed invariant without perturbing successful allocations.
+                    // Residues/distances expose geometry without publishing address-space pointers.
+                    let page = Access::<usize>::read(b"arenas.page\0".name()).ok();
+                    let previous = blocks.last().map(|last| last.as_ptr() as usize);
+                    let address = block.as_ptr() as usize;
+                    let boundary = GROW_ALIGNMENT;
+                    let maps = std::fs::read_to_string("/proc/self/maps").ok();
+                    let mappings = maps.as_deref().map(|maps| {
+                        allocator_geometry::describe(maps, address, previous, boundary)
+                    });
+                    let cache_oblivious =
+                        Access::<bool>::read(b"opt.cache_oblivious\0".name()).ok();
+                    let thp_size = std::fs::read_to_string(
+                        "/sys/kernel/mm/transparent_hugepage/hpage_pmd_size",
+                    )
+                    .ok()
+                    .and_then(|value| value.trim().parse::<usize>().ok());
+                    let thp_policy =
+                        std::fs::read_to_string("/sys/kernel/mm/transparent_hugepage/enabled")
+                            .ok()
+                            .and_then(|value| allocator_geometry::thp_policy(&value));
+                    let direction = previous.map(|value| address.cmp(&value));
+                    eprintln!(
+                        "layout_geometry arena={arena} block={n} allocator_page={page:?} requested={BLOCK} capacity={} residue={} previous_residue={:?} distance={:?} cache_oblivious={cache_oblivious:?} mappings={mappings:?} direction={direction:?} thp_size={thp_size:?} thp_policy={thp_policy:?}",
+                        block.capacity(),
+                        address % boundary,
+                        previous.map(|value| value % boundary),
+                        previous.map(|value| address.abs_diff(value)),
+                    );
+                }
                 assert!(on_2mib(block.as_ptr()), "arena {arena}, block {n}");
             }
             blocks.push(block);
@@ -309,7 +344,7 @@ fn bins_jemalloc_conf() -> &'static str {
 
 /// True when `ptr` is at a 2 MiB boundary.
 fn on_2mib(ptr: *const u8) -> bool {
-    (ptr as usize).is_multiple_of(2 * MIB)
+    (ptr as usize).is_multiple_of(GROW_ALIGNMENT)
 }
 
 /// True when the process at `proc_dir` (/proc/<pid>) has a thread whose
